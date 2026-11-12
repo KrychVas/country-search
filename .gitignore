@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Production build
+dist/
+
+# Editor directories and files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Testing
+coverage/
