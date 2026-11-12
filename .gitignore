@@ -1,8 +1,15 @@
 # Dependencies
 node_modules/
 
-# Production build
+# Local npm cache (used when the global cache is not writable)
+.npm-cache/
+
+# Vite/Vitest cache
+.vite-cache/
+
+# Build output
 dist/
+*.tsbuildinfo
 
 # Editor directories and files
 .idea/

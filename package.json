@@ -1,38 +1,53 @@
 {
   "name": "country-search",
   "version": "1.0.0",
-  "main": "index.js",
+  "private": true,
+  "description": "Live country search with request cancellation, caching and search history",
+  "type": "module",
   "scripts": {
-    "test": "vitest run",
-    "build": "tsc",
+    "test": "vitest run --configLoader runner",
+    "test:watch": "vitest --configLoader runner",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
     "prepare": "husky"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/KrychVas/country-search.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "typescript",
+    "countries",
+    "debounce",
+    "abortcontroller"
+  ],
+  "author": "Vasyl Krychfalushii",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/KrychVas/country-search/issues"
   },
   "homepage": "https://github.com/KrychVas/country-search#readme",
-  "description": "",
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "eslint": "^9.39.5",
+    "globals": "^16.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.10.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^5.1.0"
   },
   "lint-staged": {
-    "*.{ts,js,json,md}": [
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,html,css}": [
       "prettier --write"
     ]
   }
