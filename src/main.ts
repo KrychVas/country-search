@@ -2,6 +2,7 @@ import { createCountriesRepository } from './core/country-repository.js';
 import { SearchController } from './core/search-controller.js';
 import { SearchHistory } from './core/search-history.js';
 import type { StorageLike } from './core/search-history.js';
+import { DEFAULT_LANGUAGE } from './i18n/i18n.js';
 import { createCountrySearchView } from './ui/country-search-view.js';
 
 function memoryStorage(): StorageLike {
@@ -42,17 +43,21 @@ const controller = new SearchController({
   timeoutMs: 8000,
 });
 
-const view = createCountrySearchView(root, {
-  onQueryChange: (query) => controller.setQuery(query),
-  onRetry: () => controller.retry(),
-  onSelect: (country) => controller.selectCountry(country),
-  onHistorySelect: (query) => {
-    controller.setQuery(query);
-    controller.retry();
+const view = createCountrySearchView(
+  root,
+  {
+    onQueryChange: (query) => controller.setQuery(query),
+    onRetry: () => controller.retry(),
+    onSelect: (country) => controller.selectCountry(country),
+    onHistorySelect: (query) => {
+      controller.setQuery(query);
+      controller.retry();
+    },
+    getHistory: () => history.list(),
+    clearHistory: () => history.clear(),
   },
-  getHistory: () => history.list(),
-  clearHistory: () => history.clear(),
-});
+  { initialLanguage: DEFAULT_LANGUAGE },
+);
 
 controller.subscribe((state) => view.render(state));
 window.addEventListener('pagehide', () => controller.destroy());

@@ -1,4 +1,14 @@
-import type { SearchState } from '../core/search-controller.js';
+import type { SearchError, SearchState } from '../core/search-controller.js';
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  LOCALES,
+  formatCountryCount,
+  formatTemplate,
+  getMessages,
+  isLanguage,
+} from '../i18n/i18n.js';
+import type { Language, Messages } from '../i18n/i18n.js';
 import type { Country } from '../types/country.js';
 
 export interface CountrySearchViewCallbacks {
@@ -10,8 +20,14 @@ export interface CountrySearchViewCallbacks {
   clearHistory(): void;
 }
 
+export interface CountrySearchViewOptions {
+  initialLanguage?: Language;
+}
+
 export interface CountrySearchView {
   render(state: SearchState): void;
+  setLanguage(language: Language): void;
+  getLanguage(): Language;
 }
 
 type ElementOptions = {
@@ -37,20 +53,42 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('uk-UA').format(value);
+function formatNumber(value: number, language: Language): string {
+  return new Intl.NumberFormat(LOCALES[language]).format(value);
 }
 
-function card(country: Country, onSelect: (country: Country) => void): HTMLButtonElement {
+function errorMessage(error: SearchError | null, messages: Messages): string {
+  if (error?.kind === 'timeout') {
+    return messages.errorTimeout;
+  }
+  if (error?.kind === 'http') {
+    return formatTemplate(messages.errorHttp, { status: error.status });
+  }
+  return messages.errorNetwork;
+}
+
+function createCard(
+  country: Country,
+  onSelect: (country: Country) => void,
+  messages: Messages,
+  language: Language,
+): HTMLButtonElement {
   const button = element('button', {
     className: 'country-card',
-    attributes: { type: 'button', 'aria-label': `Деталі: ${country.name}` },
+    attributes: {
+      type: 'button',
+      'aria-label': formatTemplate(messages.detailsAria, { name: country.name }),
+    },
   });
 
   if (country.flagUrl !== '') {
     const image = element('img', {
       className: 'country-card__flag',
-      attributes: { src: country.flagUrl, alt: `Прапор: ${country.name}`, loading: 'lazy' },
+      attributes: {
+        src: country.flagUrl,
+        alt: formatTemplate(messages.flagAlt, { name: country.name }),
+        loading: 'lazy',
+      },
     });
     image.addEventListener('error', () => {
       image.replaceWith(
@@ -67,10 +105,13 @@ function card(country: Country, onSelect: (country: Country) => void): HTMLButto
   const body = element('span', { className: 'country-card__body' });
   body.append(
     element('strong', { className: 'country-card__name', text: country.name }),
-    element('span', { className: 'country-card__meta', text: `Столиця: ${country.capital}` }),
     element('span', {
       className: 'country-card__meta',
-      text: `${country.region} · ${formatNumber(country.population)} осіб`,
+      text: `${messages.capital}: ${country.capital}`,
+    }),
+    element('span', {
+      className: 'country-card__meta',
+      text: `${country.region} · ${formatNumber(country.population, language)} ${messages.people}`,
     }),
   );
   button.append(body);
@@ -90,25 +131,90 @@ function detailRow(term: string, value: string): DocumentFragment {
 export function createCountrySearchView(
   root: HTMLElement,
   callbacks: CountrySearchViewCallbacks,
+  options: CountrySearchViewOptions = {},
 ): CountrySearchView {
-  const shell = element('main', { className: 'app' });
-  const header = element('header', { className: 'hero' });
-  header.append(
-    element('p', { className: 'hero__eyebrow', text: 'countries.dev · live search' }),
-    element('h1', { className: 'hero__title', text: 'Пошук країн' }),
-    element('p', {
-      className: 'hero__subtitle',
-      text: 'Почніть вводити назву — результати оновляться автоматично.',
+  let language: Language = options.initialLanguage ?? DEFAULT_LANGUAGE;
+  let messages = getMessages(language);
+  let lastState: SearchState | null = null;
+
+  const languageSwitcher = element('div', { className: 'language-switcher' });
+  const languageButton = element('button', {
+    className: 'language-switcher__button',
+    attributes: {
+      type: 'button',
+      'aria-haspopup': 'menu',
+      'aria-expanded': 'false',
+      'aria-controls': 'language-menu',
+    },
+  });
+  const languageButtonText = element('span', { className: 'language-switcher__current' });
+  languageButton.append(
+    element('span', {
+      className: 'language-switcher__globe',
+      text: '🌐',
+      attributes: { 'aria-hidden': 'true' },
+    }),
+    languageButtonText,
+    element('span', {
+      className: 'language-switcher__chevron',
+      attributes: { 'aria-hidden': 'true' },
     }),
   );
 
-  const search = element('section', {
-    className: 'search-panel',
-    attributes: { 'aria-label': 'Пошук країн' },
+  const languageMenu = element('div', {
+    className: 'language-switcher__menu',
+    attributes: { id: 'language-menu', role: 'menu' },
   });
+  languageMenu.hidden = true;
+  const languageOptions = LANGUAGES.map((item) => {
+    const option = element('button', {
+      className: 'language-switcher__option',
+      text: item.label,
+      attributes: { type: 'button', role: 'menuitem' },
+    });
+    option.addEventListener('click', () => {
+      setLanguage(item.code);
+      closeLanguageMenu();
+    });
+    languageMenu.append(option);
+    return { code: item.code, node: option };
+  });
+  languageSwitcher.append(languageButton, languageMenu);
+
+  function closeLanguageMenu(): void {
+    languageMenu.hidden = true;
+    languageButton.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleLanguageMenu(): void {
+    const willOpen = languageMenu.hidden;
+    languageMenu.hidden = !willOpen;
+    languageButton.setAttribute('aria-expanded', String(willOpen));
+  }
+
+  languageButton.addEventListener('click', toggleLanguageMenu);
+  document.addEventListener('click', (event) => {
+    if (event.target instanceof Node && !languageSwitcher.contains(event.target)) {
+      closeLanguageMenu();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !languageMenu.hidden) {
+      closeLanguageMenu();
+      languageButton.focus();
+    }
+  });
+
+  const shell = element('main', { className: 'app' });
+  const header = element('header', { className: 'hero' });
+  const eyebrow = element('p', { className: 'hero__eyebrow', text: 'countries.dev · live search' });
+  const title = element('h1', { className: 'hero__title' });
+  const subtitle = element('p', { className: 'hero__subtitle' });
+  header.append(eyebrow, title, subtitle);
+
+  const search = element('section', { className: 'search-panel' });
   const label = element('label', {
     className: 'search-panel__label',
-    text: 'Назва країни',
     attributes: { for: 'country-query' },
   });
   const input = element('input', {
@@ -116,7 +222,6 @@ export function createCountrySearchView(
     attributes: {
       id: 'country-query',
       type: 'search',
-      placeholder: 'Наприклад, Spain або Ukraine',
       autocomplete: 'off',
       spellcheck: 'false',
     },
@@ -129,17 +234,19 @@ export function createCountrySearchView(
     attributes: { 'aria-labelledby': 'history-title' },
   });
   const historyHeader = element('div', { className: 'history__header' });
-  historyHeader.append(element('h2', { className: 'history__title', text: 'Останні запити' }));
+  const historyTitle = element('h2', {
+    className: 'history__title',
+    attributes: { id: 'history-title' },
+  });
   const clearHistory = element('button', {
     className: 'button button--ghost button--small',
-    text: 'Очистити',
     attributes: { type: 'button' },
   });
   clearHistory.addEventListener('click', () => {
     callbacks.clearHistory();
     renderHistory();
   });
-  historyHeader.append(clearHistory);
+  historyHeader.append(historyTitle, clearHistory);
   const historyList = element('div', { className: 'history__list' });
   historySection.append(historyHeader, historyList);
 
@@ -151,7 +258,6 @@ export function createCountrySearchView(
   const dialog = element('dialog', { className: 'country-dialog' });
   const dialogClose = element('button', {
     className: 'country-dialog__close',
-    text: 'Закрити',
     attributes: { type: 'button' },
   });
   dialogClose.addEventListener('click', () => dialog.close());
@@ -164,8 +270,67 @@ export function createCountrySearchView(
   const dialogContent = element('div', { className: 'country-dialog__content' });
   dialog.append(dialogClose, dialogContent);
 
-  shell.append(header, search, historySection, status);
-  root.append(shell, dialog);
+  const footer = element('footer', { className: 'footer' });
+  const madeBy = element('p', { className: 'footer__item', text: 'Made by ' });
+  madeBy.append(
+    element('a', {
+      className: 'footer__link',
+      text: 'Vasyl Krychfalushii',
+      attributes: {
+        href: 'https://github.com/KrychVas',
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    }),
+  );
+  const rsSchool = element('p', { className: 'footer__item', text: 'Powered by ' });
+  rsSchool.append(
+    element('a', {
+      className: 'footer__link',
+      text: 'RS School',
+      attributes: {
+        href: 'https://rs.school/',
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    }),
+  );
+  footer.append(
+    madeBy,
+    element('p', { className: 'footer__item footer__year', text: '© 2026' }),
+    rsSchool,
+  );
+
+  shell.append(header, search, historySection, status, footer);
+  root.append(shell, languageSwitcher, dialog);
+
+  function updateLanguageControl(): void {
+    const current = LANGUAGES.find((item) => item.code === language);
+    languageButtonText.textContent = current?.label ?? 'English';
+    languageButton.setAttribute('aria-label', messages.languageAria);
+    languageMenu.setAttribute('aria-label', messages.languageAria);
+    for (const option of languageOptions) {
+      option.node.setAttribute('aria-current', option.code === language ? 'true' : 'false');
+    }
+  }
+
+  function applyCopy(): void {
+    document.documentElement.lang = language;
+    document.title = messages.pageTitle;
+    updateLanguageControl();
+    search.setAttribute('aria-label', messages.searchAria);
+    title.textContent = messages.title;
+    subtitle.textContent = messages.subtitle;
+    label.textContent = messages.searchLabel;
+    input.placeholder = messages.searchPlaceholder;
+    historyTitle.textContent = messages.historyTitle;
+    clearHistory.textContent = messages.clearHistory;
+    dialogClose.textContent = messages.close;
+
+    if (lastState !== null) {
+      render(lastState);
+    }
+  }
 
   function renderHistory(): void {
     const items = callbacks.getHistory();
@@ -190,18 +355,13 @@ export function createCountrySearchView(
     const wrapper = element('div', { className: 'state state--loading' });
     wrapper.append(
       element('span', { className: 'spinner', attributes: { 'aria-hidden': 'true' } }),
-      element('p', { text: 'Шукаємо країни…' }),
+      element('p', { text: messages.loading }),
     );
     status.replaceChildren(wrapper);
   }
 
   function renderIdle(): void {
-    status.replaceChildren(
-      element('p', {
-        className: 'state state--idle',
-        text: 'Введіть хоча б одну літеру, щоб почати пошук.',
-      }),
-    );
+    status.replaceChildren(element('p', { className: 'state state--idle', text: messages.idle }));
   }
 
   function renderEmpty(): void {
@@ -212,20 +372,20 @@ export function createCountrySearchView(
         text: '🔎',
         attributes: { 'aria-hidden': 'true' },
       }),
-      element('h2', { text: 'Нічого не знайдено' }),
-      element('p', { text: 'Спробуйте інше написання або коротший запит.' }),
+      element('h2', { text: messages.emptyTitle }),
+      element('p', { text: messages.emptyText }),
     );
     status.replaceChildren(wrapper);
   }
 
-  function renderError(message: string | null): void {
+  function renderError(error: SearchError | null): void {
     const wrapper = element('div', {
       className: 'state state--error',
       attributes: { role: 'alert' },
     });
     const retry = element('button', {
       className: 'button button--primary',
-      text: 'Повторити',
+      text: messages.retry,
       attributes: { type: 'button' },
     });
     retry.addEventListener('click', () => callbacks.onRetry());
@@ -235,8 +395,8 @@ export function createCountrySearchView(
         text: '⚠️',
         attributes: { 'aria-hidden': 'true' },
       }),
-      element('h2', { text: 'Не вдалося виконати пошук' }),
-      element('p', { text: message ?? 'Спробуйте ще раз.' }),
+      element('h2', { text: messages.errorTitle }),
+      element('p', { text: errorMessage(error, messages) }),
       retry,
     );
     status.replaceChildren(wrapper);
@@ -245,17 +405,32 @@ export function createCountrySearchView(
   function renderResults(results: Country[]): void {
     const heading = element('div', { className: 'results__heading' });
     heading.append(
-      element('h2', { text: 'Результати' }),
+      element('h2', { text: messages.resultsTitle }),
       element('span', {
         className: 'results__count',
-        text: `${results.length} ${results.length === 1 ? 'країна' : 'країн'}`,
+        text: formatCountryCount(results.length, language),
       }),
     );
     const list = element('div', { className: 'results__grid' });
     list.append(
-      ...results.map((country) => card(country, (selected) => callbacks.onSelect(selected))),
+      ...results.map((country) => createCard(country, callbacks.onSelect, messages, language)),
     );
     status.replaceChildren(heading, list);
+  }
+
+  function localizedDescription(country: Country): string {
+    const location =
+      country.subregion === '—' ? country.region : `${country.region} (${country.subregion})`;
+    const base = formatTemplate(messages.description, {
+      name: country.name,
+      location,
+      capital: country.capital,
+    });
+    const native =
+      country.nativeName !== '' && country.nativeName !== country.name
+        ? ` ${formatTemplate(messages.nativeNote, { name: country.nativeName })}`
+        : '';
+    return `${base}${native}`;
   }
 
   function renderDetails(country: Country | null): void {
@@ -266,16 +441,19 @@ export function createCountrySearchView(
       return;
     }
 
-    const title = element('div', { className: 'country-dialog__heading' });
+    const heading = element('div', { className: 'country-dialog__heading' });
     if (country.flagUrl !== '') {
-      title.append(
+      heading.append(
         element('img', {
           className: 'country-dialog__flag',
-          attributes: { src: country.flagUrl, alt: `Прапор: ${country.name}` },
+          attributes: {
+            src: country.flagUrl,
+            alt: formatTemplate(messages.flagAlt, { name: country.name }),
+          },
         }),
       );
     } else {
-      title.append(
+      heading.append(
         element('span', { className: 'country-dialog__flag-emoji', text: country.flagEmoji }),
       );
     }
@@ -287,51 +465,68 @@ export function createCountrySearchView(
         text: country.nativeName === '' ? country.alpha3Code : country.nativeName,
       }),
     );
-    title.append(names);
+    heading.append(names);
 
     const description = element('p', {
       className: 'country-dialog__description',
-      text: country.description,
+      text: localizedDescription(country),
     });
     const facts = document.createElement('dl');
     facts.append(
-      detailRow('Столиця', country.capital),
-      detailRow('Регіон', country.region),
-      detailRow('Субрегіон', country.subregion),
-      detailRow('Населення', `${formatNumber(country.population)} осіб`),
-      detailRow('Площа', `${formatNumber(country.area)} км²`),
-      detailRow('Мови', country.languages.join(', ')),
-      detailRow('Валюта', country.currencies.join(', ')),
-      detailRow('Кордони', country.borders.join(', ')),
+      detailRow(messages.detailCapital, country.capital),
+      detailRow(messages.detailRegion, country.region),
+      detailRow(messages.detailSubregion, country.subregion),
+      detailRow(
+        messages.detailPopulation,
+        `${formatNumber(country.population, language)} ${messages.people}`,
+      ),
+      detailRow(
+        messages.detailArea,
+        `${formatNumber(country.area, language)} ${messages.areaUnit}`,
+      ),
+      detailRow(messages.detailLanguages, country.languages.join(', ')),
+      detailRow(messages.detailCurrency, country.currencies.join(', ')),
+      detailRow(messages.detailBorders, country.borders.join(', ')),
     );
-    dialogContent.replaceChildren(title, description, facts);
+    dialogContent.replaceChildren(heading, description, facts);
     if (!dialog.open) {
       dialog.showModal();
     }
   }
 
-  renderHistory();
+  function render(state: SearchState): void {
+    lastState = state;
+    if (input.value !== state.query) {
+      input.value = state.query;
+    }
+    renderHistory();
+
+    if (state.status === 'loading') {
+      renderLoading();
+    } else if (state.status === 'empty') {
+      renderEmpty();
+    } else if (state.status === 'error') {
+      renderError(state.error);
+    } else if (state.status === 'success') {
+      renderResults(state.results);
+    } else {
+      renderIdle();
+    }
+
+    renderDetails(state.selected);
+  }
+
+  function setLanguage(nextLanguage: Language): void {
+    language = isLanguage(nextLanguage) ? nextLanguage : DEFAULT_LANGUAGE;
+    messages = getMessages(language);
+    applyCopy();
+  }
+
+  applyCopy();
 
   return {
-    render(state: SearchState): void {
-      if (input.value !== state.query) {
-        input.value = state.query;
-      }
-      renderHistory();
-
-      if (state.status === 'loading') {
-        renderLoading();
-      } else if (state.status === 'empty') {
-        renderEmpty();
-      } else if (state.status === 'error') {
-        renderError(state.error);
-      } else if (state.status === 'success') {
-        renderResults(state.results);
-      } else {
-        renderIdle();
-      }
-
-      renderDetails(state.selected);
-    },
+    render,
+    setLanguage,
+    getLanguage: () => language,
   };
 }

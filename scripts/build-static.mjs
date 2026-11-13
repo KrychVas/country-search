@@ -14,4 +14,5 @@ if (builtHtml === sourceHtml) {
 
 await writeFile(resolve(dist, 'index.html'), builtHtml);
 await copyFile(resolve(root, 'styles.css'), resolve(dist, 'styles.css'));
+await copyFile(resolve(root, 'favicon.svg'), resolve(dist, 'favicon.svg'));
 console.warn('Static files copied to dist/');

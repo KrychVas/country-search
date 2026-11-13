@@ -6,11 +6,14 @@ import { mapCountryResponse } from './map-country-response.js';
 
 export type SearchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
 
+export type SearchError =
+  { kind: 'timeout' } | { kind: 'http'; status: number } | { kind: 'network' };
+
 export interface SearchState {
   query: string;
   status: SearchStatus;
   results: Country[];
-  error: string | null;
+  error: SearchError | null;
   lastQuery: string;
   selected: Country | null;
 }
@@ -26,8 +29,6 @@ export type StateListener = (state: SearchState) => void;
 
 const DEFAULT_DEBOUNCE_MS = 300;
 const DEFAULT_TIMEOUT_MS = 8000;
-const TIMEOUT_MESSAGE = 'Запит триває занадто довго. Перевірте з’єднання та спробуйте ще раз.';
-const NETWORK_MESSAGE = 'Не вдалося завантажити дані. Перевірте з’єднання та спробуйте ще раз.';
 
 function isNamedError(error: unknown, name: string): boolean {
   if (typeof error !== 'object' || error === null) {
@@ -166,7 +167,7 @@ export class SearchController {
       }
 
       if (timeoutSignal.aborted || isNamedError(error, 'TimeoutError')) {
-        this.patch({ status: 'error', results: [], error: TIMEOUT_MESSAGE, selected: null });
+        this.patch({ status: 'error', results: [], error: { kind: 'timeout' }, selected: null });
         return;
       }
 
@@ -174,11 +175,9 @@ export class SearchController {
         return;
       }
 
-      const message =
-        error instanceof HttpError
-          ? `Сервер повернув помилку ${error.status}. Спробуйте ще раз.`
-          : NETWORK_MESSAGE;
-      this.patch({ status: 'error', results: [], error: message, selected: null });
+      const requestError: SearchError =
+        error instanceof HttpError ? { kind: 'http', status: error.status } : { kind: 'network' };
+      this.patch({ status: 'error', results: [], error: requestError, selected: null });
     } finally {
       if (this.activeController === callerController) {
         this.activeController = null;
