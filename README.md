@@ -5,7 +5,7 @@ Live country search built with TypeScript and the public
 aborts the previous request with `AbortController`, so a slower old response can
 never replace the newer result.
 
-**Deploy URL:** _add the GitHub Pages URL after the first deployment._
+**Deploy URL:** [https://krychvas.github.io/country-search/](https://krychvas.github.io/country-search/)
 
 ## Features
 
