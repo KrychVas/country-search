@@ -85,9 +85,11 @@ export class SearchController {
   setQuery(rawQuery: string): void {
     const query = rawQuery.trim();
     this.debouncedSearch.cancel();
+    // Abort now, not when the new debounced request starts: the old response
+    // may otherwise arrive during the debounce window and render stale data.
+    this.cancelActiveRequest();
 
     if (query === '') {
-      this.cancelActiveRequest();
       this.patch({ ...initialState(), query: rawQuery });
       return;
     }
