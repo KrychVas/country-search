@@ -4,6 +4,7 @@ export default defineConfig({
   cacheDir: '.vite-cache',
   test: {
     pool: 'threads',
+    fsModuleCache: false,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     passWithNoTests: true,
