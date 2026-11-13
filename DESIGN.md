@@ -158,7 +158,23 @@ effectively O(1); adding is O(h) for the uniqueness scan and JSON serialization.
 - Cache tests cover a hit, concurrent deduplication, one-of-two cancellation,
   all-consumers cancellation and uncached failures.
 
-## 7. Deployment
+## 7. Localization
+
+The UI starts in English (`DEFAULT_LANGUAGE` in `src/i18n/i18n.ts`). The
+top-right selector switches between English, Ukrainian, Russian and Czech. All
+static copy, loading/empty/error messages, labels, ARIA text, number formatting
+and plural forms come from one typed `Messages` dictionary per language.
+`document.documentElement.lang` and `document.title` are updated too.
+
+The controller deliberately stores a language-neutral `SearchError`
+(`timeout`, `http` with a status, or `network`) instead of a ready-made string.
+The view translates it at render time, so changing the language can re-render an
+already failed request without repeating the network call. `Intl.PluralRules`
+and `Intl.NumberFormat` use the selected locale. Adding a language requires one
+new dictionary entry and one entry in `LANGUAGES`; the completeness test fails
+if a key is missing.
+
+## 8. Deployment
 
 `npm run build` compiles TypeScript to ES modules with `tsc` and copies a
 Pages-ready `index.html` (referencing `./main.js`) plus `styles.css` into

@@ -18,6 +18,9 @@ never replace the newer result.
 - Bonus: bounded query cache + in-flight deduplication with independent caller
   signals.
 - Bonus: recent queries in `localStorage`; clicking one searches immediately.
+- Language switcher in the top-right corner: English (default), Ukrainian,
+  Russian and Czech. Country data stays in English; all UI labels, states,
+  errors, details and numbers are localized.
 
 ## Stack
 
@@ -62,6 +65,8 @@ src/
     search-controller.ts    # DOM-free state machine, abort + timeout logic
     country-repository.ts   # cache and reference-counted deduplication
     search-history.ts       # safe localStorage history
+  i18n/
+    i18n.ts                 # EN/UK/RU/CS dictionaries and plural rules
   ui/
     country-search-view.ts  # createElement/textContent only
   main.ts                   # composition root
@@ -109,18 +114,20 @@ filtering.
 - [x] 404 shows a friendly empty state, not an error.
 - [x] Real errors show a message and a retry button for the last query.
 - [x] Clicking a card opens the detail view.
+- [x] English is the default language; the switch offers Ukrainian, Russian and
+      Czech and updates every visible label immediately.
 - [ ] Verify the deployed build manually in DevTools with network throttling and
       offline mode.
 
 ## Deployment
 
 The included GitHub Pages workflow builds and publishes `dist/` on every push to
-`main`:
+`main` or `country-search`:
 
-1. Push the `country-search` branch.
-2. Open a PR into `main` and do not merge it before review.
-3. After merge (or via `workflow_dispatch`), enable **Settings → Pages → Build
-   and deployment → GitHub Actions**.
+1. Enable **Settings → Pages → Build and deployment → GitHub Actions**.
+2. Push the `country-search` branch. The workflow also deploys from this branch,
+   so a working URL exists before the PR is merged.
+3. Open a PR into `main` and do not merge it before review.
 4. Put the published URL in the PR description and at the top of this README.
 
 ## Notes
