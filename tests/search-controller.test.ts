@@ -99,7 +99,7 @@ describe('SearchController errors and states', () => {
     await vi.advanceTimersByTimeAsync(300);
     await flushPromises();
     expect(controller.getState().status).toBe('error');
-    expect(controller.getState().error).toContain('500');
+    expect(controller.getState().error).toEqual({ kind: 'http', status: 500 });
 
     controller.retry();
     await flushPromises();
@@ -161,7 +161,7 @@ describe('SearchController errors and states', () => {
     await flushPromises();
 
     expect(controller.getState().status).toBe('error');
-    expect(controller.getState().error).toContain('занадто довго');
+    expect(controller.getState().error).toEqual({ kind: 'timeout' });
   });
 
   it('selects and clears a country detail without changing search results', async () => {
