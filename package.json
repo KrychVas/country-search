@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "tsc && node scripts/build-static.mjs",
     "prepare": "husky"
   },
   "repository": {
